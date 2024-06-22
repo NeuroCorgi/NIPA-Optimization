@@ -4,35 +4,50 @@ import datetime as dt
 from utils.Country import Country
 from utils.io import save_train_data
 
-def compensate_fluctuations(data, dates):
-    I_transposed = data.transpose(include_header=True, header_name="k", column_names="i")
+def compensate_fluctuations(data, dates, time):
+    """
+    Compensate for fluctuations in the data using a rolling mean.
+
+    Parameters
+    ----------
+    data : DataFrame
+        The input data containing infection numbers.
+    dates : dict
+        A dictionary mapping indices to dates.
+    time : int
+        The window size in days for the rolling mean.
+
+    Returns
+    -------
+    DataFrame
+        A DataFrame with compensated fluctuations.
+    """
+    # Transpose data to work with dates and regions
+    I_transposed = data.transpose(include_header=True, header_name="k", column_names="regions")
     start_date = dates[1]
 
     col = []
-
     for row in I_transposed[:, 0].to_list():
         date = start_date + dt.timedelta(days=int(row)-1)
         col.append(date)
 
     I_transposed = I_transposed.with_columns(pl.Series("k", col))
 
-    I_compensated = I_transposed.select([col.rolling_mean(window_size=1, min_periods=1) for col in I_transposed[:, 1:].get_columns()])
+    # Apply rolling mean to compensate for fluctuations
+    I_compensated = I_transposed.select([pl.col(col.name).rolling_mean_by('k', window_size=f'{time}d', closed='both') for col in I_transposed[:, 1:].get_columns()])
     I_compensated = I_compensated.insert_column(0, I_transposed.get_column('k'))
 
     col = []
-
     for row in I_compensated[:, 0].to_list():
         k = int((row - start_date).days) + 1
         col.append(str(k))
 
     I_compensated = I_compensated.with_columns(pl.Series("k", col))
-
-    I_compensated = I_compensated.transpose(include_header=True, header_name="i", column_names="k")
+    I_compensated = I_compensated.transpose(include_header=True, header_name="regions", column_names="k")
     I = I_compensated
 
     return I
 
-# Get the population of each region
 def get_population(regions, population_data):
     """
     Get the population of each region.
@@ -49,10 +64,7 @@ def get_population(regions, population_data):
     DataFrame
         A DataFrame with the population of each region.
     """
-    population_per_region = {}
-
-    for region in regions:
-        population_per_region[region] = population_data.to_list()[regions.index(region)]
+    population_per_region = {region: population_data.to_list()[regions.index(region)] for region in regions}
 
     population = pl.DataFrame({
         "regions": regions,
@@ -62,7 +74,6 @@ def get_population(regions, population_data):
 
     return population
 
-# Get the fraction of COVID-19 cases of each region
 def get_I(data, regions, population, final_date):
     """
     Get the fraction of COVID-19 cases of each region.
@@ -84,10 +95,9 @@ def get_I(data, regions, population, final_date):
         A tuple containing the DataFrame with infection fractions and a dictionary with dates.
     """
     I = pl.DataFrame({
-        "i": regions
+        "regions": regions
     })
 
-    # Get the population per region in a dict for faster access
     population_per_region = {region: population for region, population in zip(regions, population.get_column('population').to_list())}
 
     k = 1
@@ -105,13 +115,12 @@ def get_I(data, regions, population, final_date):
                 # If the date is before the end date, insert the fraction of COVID-19 cases of each region
                 I.insert_column(k, pl.Series(str(k),
                                        [(infections / population_per_region[regions[i]]) for i, infections in enumerate(col.to_list())]))
-
                 k += 1
             else:
                 break
         # If the header is not a date, continue
         except ValueError:
-            date = None
+            continue
     
     k_list = list(I_dates.keys())
     print(f"First date: {I_dates[k_list[0]]} Last date: {I_dates[k_list[-1]]} Difference in days: {(I_dates[k_list[-1]] - I_dates[k_list[0]])}")
@@ -134,8 +143,8 @@ def get_data(country, final_date="all", compensate_fluctuations=True):
 
     Returns
     -------
-    DataFrame
-        A DataFrame containing the data for the specified country.
+    tuple
+        A tuple containing the data, dates, and regions.
     """
     match country:
         case Country.Mexico:
@@ -146,6 +155,22 @@ def get_data(country, final_date="all", compensate_fluctuations=True):
             return get_hubei_province(final_date, compensate_fluctuations)
 
 def get_hubei_province(final_date="all", do_compensate_fluctuations=True):
+    """
+    Get COVID-19 data for Hubei province.
+
+    Parameters
+    ----------
+    final_date : str or datetime.date, optional
+        The final date up to which to retrieve data. Default is "all".
+    do_compensate_fluctuations : bool, optional
+        Whether to compensate for fluctuations in the data. Default is True.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the DataFrame with infection fractions, a dictionary with dates, 
+        and a list of region names.
+    """
     if final_date == "all":
         final_date = dt.datetime(year=2020, month=2, day=14).date()
 
@@ -153,6 +178,7 @@ def get_hubei_province(final_date="all", do_compensate_fluctuations=True):
 
     DATA_FILENAME = "data/hubei_data.csv"
     full_data = pl.read_csv(DATA_FILENAME)
+    full_data = full_data.filter(pl.col("City") != "Shennongjia")
 
     full_data = full_data.rename({"Population": "population",
                                   "City": "regions"})
@@ -165,7 +191,7 @@ def get_hubei_province(final_date="all", do_compensate_fluctuations=True):
     regions = full_data.get_column('regions').to_list()
     population = full_data[:, :2]
 
-    # average out the 8th step of the data
+    # Average out the 8th step of the data
     eight_row = []
     for row in range(len(full_data.to_series(9).to_list())):
         value_seventh = full_data.to_series(8).to_list()[row]
@@ -178,15 +204,12 @@ def get_hubei_province(final_date="all", do_compensate_fluctuations=True):
     I, I_dates = get_I(full_data, regions, population, final_date)
 
     if do_compensate_fluctuations:
-        I = compensate_fluctuations(I, I_dates)
+        I = compensate_fluctuations(I, I_dates, 1)
 
-    
-    # Save the fraction of COVID-19 cases of each region to a csv file
     save_train_data(I, Country.Hubei, "I")
 
     return I, I_dates, regions
 
-# Receive the COVID-19 cases from the mexican states
 def get_mexican_states(final_date="all", do_compensate_fluctuations=True):
     """
     Receive the COVID-19 cases from the Mexican states.
@@ -195,7 +218,7 @@ def get_mexican_states(final_date="all", do_compensate_fluctuations=True):
     ----------
     final_date : str or datetime.date, optional
         The final date up to which to retrieve data. Default is "all".
-    compensate_fluctuations : bool, optional
+    do_compensate_fluctuations : bool, optional
         Whether to compensate for fluctuations in the data. Default is True.
 
     Returns
@@ -206,7 +229,6 @@ def get_mexican_states(final_date="all", do_compensate_fluctuations=True):
     """
     if final_date == "all":
         final_date = dt.datetime(year=2023, month=6, day=24).date()
-
 
     DATA_FILENAME = "data/mexican_state_data.csv"
     full_data = pl.read_csv(DATA_FILENAME)
@@ -220,7 +242,6 @@ def get_mexican_states(final_date="all", do_compensate_fluctuations=True):
                                         capitalize_regions(full_data.get_column('nombre').to_list())))
     
     full_data = full_data.sort("cve_ent")
-    
     regions = full_data.get_columns()[2].to_list()
 
     # Get the population of each region and save it to a csv file
@@ -230,44 +251,127 @@ def get_mexican_states(final_date="all", do_compensate_fluctuations=True):
     I, I_dates = get_I(full_data, regions, population, final_date)
 
     if do_compensate_fluctuations:
-        I = compensate_fluctuations(I, I_dates)
+        I = compensate_fluctuations(I, I_dates, 7)
 
-    # Save the fraction of COVID-19 cases of each region to a csv file
     save_train_data(I, Country.Mexico, "I")
 
     return I, I_dates, regions
 
-# TODO: Implement this function
 def get_netherlands_provinces(final_date="all"):
-    ...
+    """
+    Get COVID-19 data for the Netherlands provinces.
 
-# Original NIPA (Network-inference-based prediction of the COVID-19 epidemic outbreak in the Chinese province Hubei)
-def get_NIPA_data(data, dates, n=875, pred_days=3):
+    Parameters
+    ----------
+    final_date : str or datetime.date, optional
+        The final date up to which to retrieve data. Default is "all".
+    do_compensate_fluctuations : bool, optional
+        Whether to compensate for fluctuations in the data. Default is True.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the DataFrame with infection fractions, a dictionary with dates, 
+        and a list of region names.
+    """
+    # Placeholder for future implementation
+    pass
+
+def get_NIPA_data(data, dates, n=875, pred_days=3, over_days=-1):
+    """
+    Get data for Original NIPA (Network-inference-based prediction of the COVID-19 epidemic outbreak).
+
+    Parameters
+    ----------
+    data : DataFrame
+        The input data containing infection numbers.
+    dates : dict
+        A dictionary mapping indices to dates.
+    n : int, optional
+        The number of days to use for training. Default is 875.
+    pred_days : int, optional
+        The number of days to predict. Default is 3.
+    over_days : int, optional
+        The number of days to overlap for training. Default is -1.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the training data, prediction data, and training dates.
+    """
     if (n+pred_days) > len(data.get_columns()):
-        raise Exception("Amount of dates is greater than the data available! Please choose a smaller n or smaller prediction days.")
-
+        raise ValueError("Amount of dates is greater than the data available! Please choose a smaller n or smaller prediction days.")
+    
     date_values = [date for date in dates.values()]
     X = {}
     Y = {}
     train_dates = {}
 
-    # Put data into dictionary for when training with static of dynamic NIPA (easier to implement, no need to change training code)
-    X[dates[n]] = data[:, :(n+1)]           # Train data
-    Y[dates[n]] = data[:, n:n+pred_days+1]  # Prediction data
+    print(f"Amount of dates: {len(date_values)} N: {n} Prediction days: {pred_days} Over days: {over_days}")
 
-    curr_dates = []
-    for i in range(n+pred_days):
-        curr_dates.append(date_values[(i)])
-    train_dates[1] = curr_dates
+    if over_days == -1:
+        # Prepare data for all days except the last pred_days
+        X[dates[n]] = data[:, :(n+1)]           # Train data
+        Y[dates[n]] = data[:, n:n+pred_days+1]  # Prediction data
+
+        curr_dates = date_values[:n + pred_days]
+        train_dates[1] = curr_dates
+    else:
+        for i in range(over_days, len(date_values)-pred_days+1):
+            X[dates[i]] = data[:, :i]             # Train data
+            Y[dates[i]] = data[:, i:i+pred_days]  # Prediction data
+
+            curr_dates = date_values[:i + pred_days]  
+            train_dates[i+1-over_days] = curr_dates
 
     return X, Y, train_dates
 
-# Static NIPA (Comparing the accuracy of several network-based COVID-19 prediction algorithms)
-# TODO: implement this function
 def get_static_NIPA_data(data, dates, n=875, train_days=20, pred_days=3):
-    ...
+    """
+    Get data for Static NIPA (Comparing the accuracy of several network-based COVID-19 prediction algorithms).
 
-# Dynamic NIPA (Comparing the accuracy of several network-based COVID-19 prediction algorithms)
-# TODO: implement this function
+    Parameters
+    ----------
+    data : DataFrame
+        The input data containing infection numbers.
+    dates : dict
+        A dictionary mapping indices to dates.
+    n : int, optional
+        The number of days to use for training. Default is 875.
+    train_days : int, optional
+        The number of days to train the model. Default is 20.
+    pred_days : int, optional
+        The number of days to predict. Default is 3.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the training data, prediction data, and training dates.
+    """
+    # Placeholder for future implementation
+    pass
+
 def get_dynamic_NIPA_data(data, dates, n=875, train_days=20, pred_days=3):  
-    ...
+    """
+    Get data for Dynamic NIPA (Comparing the accuracy of several network-based COVID-19 prediction algorithms).
+
+    Parameters
+    ----------
+    data : DataFrame
+        The input data containing infection numbers.
+    dates : dict
+        A dictionary mapping indices to dates.
+    n : int, optional
+        The number of days to use for training. Default is 875.
+    train_days : int, optional
+        The number of days to train the model. Default is 20.
+    pred_days : int, optional
+        The number of days to predict. Default is 3.
+
+    Returns
+    -------
+    tuple
+        A tuple containing the training data, prediction data, and training dates.
+    """
+    # Placeholder for future implementation
+    pass

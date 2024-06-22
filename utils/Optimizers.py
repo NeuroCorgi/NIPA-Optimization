@@ -1,6 +1,7 @@
 from enum import Enum
 
 class Optimizers(Enum):
-    LASSOCV = 1
-    LASSOCV_OWN = 2
-    SIMULATED_ANNEALING = 3
+    CV = 1
+    GENERALIZED_SIMULATED_ANNEALING = 3
+    DUAL_SIMULATED_ANNEALING = 4
+    DUAL_SIMULATED_ANNEALING_ALL = 5

@@ -3,8 +3,24 @@ import polars as pl
 from sklearn import metrics
 
 import utils.io as io
+from utils.Evaluations import Evaluation
 
 def sMAPE(true, pred):
+    """
+    Calculate the Symmetric Mean Absolute Percentage Error (sMAPE).
+
+    Parameters
+    ----------
+    true : array-like of shape (n_samples,)
+        True values.
+    pred : array-like of shape (n_samples,)
+        Predicted values.
+
+    Returns
+    -------
+    float
+        sMAPE value.
+    """
     with np.errstate(divide='ignore', invalid='ignore'):
         tmp = np.abs(pred-true) / ((np.abs(true) + np.abs(pred))/2)
     
@@ -13,28 +29,113 @@ def sMAPE(true, pred):
     return sMAPE
 
 def MSE(true, pred):
+    """
+    Calculate the Mean Squared Error (MSE).
+
+    Parameters
+    ----------
+    true : array-like of shape (n_samples,)
+        True values.
+    pred : array-like of shape (n_samples,)
+        Predicted values.
+
+    Returns
+    -------
+    float
+        MSE value.
+    """
     return metrics.mean_squared_error(true, pred)
         
 def MAPE(true, pred):
+    """
+    Calculate the Mean Absolute Percentage Error (MAPE).
+
+    Parameters
+    ----------
+    true : array-like of shape (n_samples,)
+        True values.
+    pred : array-like of shape (n_samples,)
+        Predicted values.
+
+    Returns
+    -------
+    float
+        MAPE value.
+    """
     return metrics.mean_absolute_percentage_error(true, pred)
 
+def get_evaluation_metrics(true, pred, evaluation):
+    """
+    Get the specified evaluation metric.
 
-# Evaluate the prediction 
-def get_prediction_evaluation(I_data, dates, date, country, type, optimizer):
-    pred_I = io.get_results_data_path(country, type, optimizer, date)
+    Parameters
+    ----------
+    true : array-like of shape (n_samples,)
+        True values.
+    pred : array-like of shape (n_samples,)
+        Predicted values.
+    evaluation : Evaluation
+        The evaluation metric to calculate.
 
-    pred_I = pl.read_csv(pred_I + "I_pred.csv")
+    Returns
+    -------
+    float
+        The calculated evaluation metric.
+    """
+    if evaluation == Evaluation.MSE:
+        return MSE(true, pred)
+    elif evaluation == Evaluation.MAPE:
+        return MAPE(true, pred)
+    elif evaluation == Evaluation.sMAPE:
+        return sMAPE(true, pred)
+    else:
+        raise Exception("Invalid evaluation metric")
 
-    # Go through each day and calculate the MSE, MAPE and sMAPE
+def get_prediction_evaluation(I_data, dates, date, country, type, optimizer, evaluations):
+    """
+    Evaluate the prediction using specified metrics.
+
+    Parameters
+    ----------
+    I_data : DataFrame
+        The actual infection data.
+    dates : dict
+        A dictionary mapping indices to dates.
+    date : datetime.date
+        The date for which the evaluation is performed.
+    country : Country
+        The country for which the evaluation is performed.
+    type : Type
+        The type of NIPA model.
+    optimizer : Optimizer
+        The optimizer used in the model.
+    evaluations : list of Evaluation
+        The list of evaluation metrics to calculate.
+
+    Returns
+    -------
+    dict
+        A dictionary with evaluation metrics for each prediction day.
+    """
+
+    pred_I_path = io.get_results_data_path(country, type, optimizer, date)
+    pred_I = pl.read_csv(pred_I_path + "I_pred.csv")
+
+    eval_results = {metric.name: [] for metric in evaluations}
+
+    # Calculate evaluation metrics for each prediction day
     for idx, col in enumerate(pred_I[:, 1:].get_columns()):
         day = col.name
+        date = dates[int(day)].strftime('%d-%m-%Y')
         pred_Ik = np.array(pred_I.get_column(day).to_list())
         yk = np.array(I_data.get_column(day).to_list())
 
-        MSE_pred_I = MSE(yk, pred_Ik)
-        MAPE_pred_I = MAPE(yk, pred_Ik)
-        sMAPE_pred_I = sMAPE(yk, pred_Ik)
+        print(f"Day {day} ({date}):")
+        for evaluation in evaluations:
+            metric_value = get_evaluation_metrics(yk, pred_Ik, evaluation)
+            eval_results[evaluation.name].append(metric_value)
+            print(f"\t{evaluation.name}: {metric_value}")
+        
+        print()
 
-        print(f"MSE for I for prediction day {day} ({dates[int(day)].strftime('%d-%m-%Y')}): {MSE_pred_I}")
-        print(f"MAPE for I for prediction day {day} ({dates[int(day)].strftime('%d-%m-%Y')}): {MAPE_pred_I}")
-        print(f"sMAPE for I for prediction day {day} ({dates[int(day)].strftime('%d-%m-%Y')}): {sMAPE_pred_I}\n")
+    return eval_results

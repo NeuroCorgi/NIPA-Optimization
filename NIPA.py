@@ -1,16 +1,13 @@
 import polars as pl
 import numpy as np
 import time
-from datetime import datetime as dt
-from datetime import timedelta
 
 from utils.Optimizers import Optimizers
-from optimizers import LASSOCV, LASSOCV_OWN, SimulatedAnnealing
-import utils.show_data as show_data
-from utils.io import save_train_data, get_train_data_path, save_results_data, get_results_data_path
+from optimizers import LASSOCV, LASSODSA, LASSOGSA
+from utils.io import get_train_data_path, save_results_data
 
 class NIPA:
-    def __init__(self, data, regions, country, type, dates, parameter_optimizer=Optimizers.LASSOCV):
+    def __init__(self, data, regions, country, type, dates, parameter_optimizer=Optimizers.CV, random=False):
         """
         Initializes the NIPA model.
 
@@ -27,11 +24,12 @@ class NIPA:
         dates : dict
             A dictionary mapping indices to dates.
         parameter_optimizer : Optimizers, optional
-            The optimizer used for parameter optimization. Default is Optimizers.CrossValidation.
+            The optimizer used for parameter optimization. Default is Optimizers.CV.
+        random : bool, optional
+            Whether to use random seed. Default is False.
         """
         
         self.save_path = "data/saves/"
-
         self.start_data = data
         self.regions = self.define_regions_i(regions)
         self.country = country
@@ -40,6 +38,7 @@ class NIPA:
         self.parameter_optimizer = parameter_optimizer
         self.curing_probs = pl.DataFrame({})
         self.I = self.get_I()
+        self.random = random
 
     def get_I(self):
         """
@@ -53,8 +52,8 @@ class NIPA:
 
         I = pl.read_csv(get_train_data_path(self.country) + "I.csv")
         # Change the column names to be the index of region i
-        I = I.with_columns(pl.Series("i", [str(i+1) for i in range(len(self.regions))]))
-        return I.transpose(include_header=True, header_name="k", column_names="i")
+        I = I.with_columns(pl.Series("regions", [str(i+1) for i in range(len(self.regions))]))
+        return I.transpose(include_header=True, header_name="k", column_names="regions")
 
     def define_regions_i(self, regions):
         """
@@ -89,7 +88,7 @@ class NIPA:
         """
 
         print(f"Training from {train_days[0]} to {train_days[-1]}")
-        save_date = train_days[0]
+        save_date = train_days[-1]
         B = pl.DataFrame({
             "regions": [self.regions[i] for i in self.regions.keys()]
         })
@@ -97,14 +96,14 @@ class NIPA:
             "parameter": ["regularization", "min", "max"]
         })
         k_list = self.convert_dates_to_k(train_days)
-
         curing_probs = self.generate_curing_probs(50)
 
+        # Train for each region
         for i in self.regions.keys():
             I_region = self.I[k_list[0]-1:k_list[-1], int(i)].to_list()
 
             B_region_list = []
-            MSE_region_list = []
+            evaluation_region_list = []
             curing_prob_region_list = []
             r_parameters_list = []
             p_min_max_list = []
@@ -112,12 +111,10 @@ class NIPA:
             ts = time.time()
             print(f"Training Region {self.regions[i]} ({i}/{len(self.regions.keys())})...")
             for curing_prob in curing_probs: 
-                # print(f"Training for curing probability {curing_prob} at time {time.time()-ts:.2f}")
                 R_region = self.calc_R(I_region, curing_prob)
                 S_region = self.calc_S(R_region, I_region)
                         
                 anomaly_R = [R for R in R_region if R > 1]
-
                 if len(anomaly_R) > 0:
                     print(f"Anomaly R values: {anomaly_R}")
                     continue
@@ -125,18 +122,18 @@ class NIPA:
                 viral_state_region = [S_region, I_region, R_region]
                 I_df = self.I[k_list[0]-1:k_list[-1], 1:]
 
-                B_region, MSE_region, p_value, p_min_max = self.inference(viral_state_region, I_df, curing_prob)
+                B_region, evaluation_region, p_value, p_min_max = self.inference(viral_state_region, I_df, curing_prob)
 
                 B_region_list.append(B_region)
-                MSE_region_list.append(MSE_region)
+                evaluation_region_list.append(evaluation_region)
                 curing_prob_region_list.append(curing_prob)
                 r_parameters_list.append([p_value, p_min_max[0], p_min_max[1]])
                 p_min_max_list.append(p_min_max)
             
-            min_index = MSE_region_list.index(min(MSE_region_list))
+            # Get the index of the best evaluation and save the best results
+            min_index = evaluation_region_list.index(min(evaluation_region_list))
             self.curing_probs = self.curing_probs.with_columns(pl.Series(str(i), [curing_prob_region_list[min_index]]))
             r_parameters = r_parameters.with_columns(pl.Series(self.regions[i], r_parameters_list[min_index]))
-
             B = B.with_columns(pl.Series(self.regions[i], B_region_list[min_index]))
 
             te = time.time()
@@ -144,7 +141,7 @@ class NIPA:
             print(f'Curing probability: {curing_probs[min_index]}')
             print(f'P min: {p_min_max_list[min_index][0]} P max: {p_min_max_list[min_index][1]}')
             print(f'Regularization value: {r_parameters_list[min_index][0]}')
-            print(f'MSE: {MSE_region_list[min_index]}')
+            print(f'evaluation: {evaluation_region_list[min_index]}')
             print(f'B: {B_region_list[min_index]}')
             print()
         
@@ -163,6 +160,8 @@ class NIPA:
             The trained model parameters.
         pred_days : list of datetime.date
             The prediction days.
+        curing_probs : DataFrame
+            The curing probabilities for each region.
 
         Returns
         -------
@@ -182,9 +181,7 @@ class NIPA:
         for i in self.regions.keys():
             curing_prob_region = curing_probs.get_column(str(i)).to_list()[0]
             I_region = self.I.get_column(str(i))[:(k_list[-1])].to_list()
-
             Ri = self.calc_R(I_region, curing_prob_region)
-
             all_Ri.append(Ri)
 
         for k in range(1, len(pred_days)+1):
@@ -228,16 +225,8 @@ class NIPA:
             The interaction sum for the specified region and time.
         """
 
-        sum = 0
-
-        # Get the interaction sum for region i, j at time k
-        # Where j is the region index, so for the index in the list we need to do j-1 (same with k)
-        for j in self.regions.keys():
-            if j == i:
-                continue
-            sum += B.get_column(self.regions[i]).to_list()[j-1] * self.I.get_column(str(j)).to_list()[k-1]
-
-        return sum
+        interaction_sum = sum(B.get_column(self.regions[i]).to_list()[j - 1] * self.I.get_column(str(j)).to_list()[k - 1] for j in self.regions.keys() if j != i)
+        return interaction_sum
 
     def convert_dates_to_k(self, days):
         """
@@ -254,11 +243,7 @@ class NIPA:
             A list of indices corresponding to the dates.
         """
 
-        k_list = []
-        for i, k in enumerate(self.dates.keys()):
-            date = self.dates[k]
-            if date >= days[0] and date <= days[-1]:
-                k_list.append(k)
+        k_list = [k for k in self.dates.keys() if self.dates[k] >= days[0] and self.dates[k] <= days[-1]]
         return k_list
 
     def calc_R(self, I_region, curing_prob):
@@ -318,9 +303,7 @@ class NIPA:
         numpy.ndarray
             An array of curing probabilities.
         """
-        curing_probs = np.linspace(0.01, 1.0, amount)
-
-        return curing_probs
+        return np.linspace(0.01, 1.0, amount)
 
     def get_region_V(self, I_region, curing_prob):
         """
@@ -339,12 +322,7 @@ class NIPA:
             The change in infection fractions for the region.
         """
 
-        Vi = []
-
-        for k in range(1, len(I_region)):
-            Vik = I_region[k] - ((1-curing_prob)*I_region[k-1])
-            Vi.append(Vik)
-
+        Vi = [(I_region[k] - ((1 - curing_prob) * I_region[k - 1])) for k in range(1, len(I_region))]
         V_np = np.asarray(Vi)
         V_np = V_np.reshape(-1, 1)
         return V_np
@@ -366,17 +344,8 @@ class NIPA:
             The maximum number of interactions between susceptible and infected individuals for the region.
         """
 
-        F = []
-
-        for k in range(len(S_region)-1):
-            row = []
-            for i, region in enumerate(self.regions):
-                elem = S_region[k] * I_df[k, i]
-                row.append(elem)
-            F.append(row)
-
-        F_np = np.asarray(F)
-        return F_np
+        F = [[S_region[k] * I_df[k, i] for i in range(len(self.regions))] for k in range(len(S_region) - 1)]
+        return np.asarray(F)
     
     def inference(self, viral_state, I_df, curing_prob):
         """
@@ -395,7 +364,7 @@ class NIPA:
         -------
         tuple
             A tuple containing the coefficients of the Lasso regression model (region_B),
-            the mean squared error of the model predictions (region_MSE), the selected alpha value
+            the mean squared error of the model predictions (region_evaluation), the selected alpha value
             for the Lasso model (p_value), and the range of candidate alpha values (p_min, p_max).
         """
 
@@ -404,10 +373,11 @@ class NIPA:
         F_region = self.get_region_F(S_region, I_df)
 
         match self.parameter_optimizer:
-            case Optimizers.LASSOCV:
-                return LASSOCV.inference(F_region, V_region)
-            case Optimizers.LASSOCV_OWN:
-                return LASSOCV_OWN.inference(F_region, V_region)
-            case Optimizers.SIMULATED_ANNEALING:
-                return SimulatedAnnealing.inference(F_region, V_region, 1000)
-    
+            case Optimizers.CV:
+                return LASSOCV.inference(F_region, V_region, random=self.random)
+            case Optimizers.CV_OWN:
+                return LASSOCV_OWN.inference(F_region, V_region, random=self.random)
+            case Optimizers.GENERALIZED_SIMULATED_ANNEALING:
+                return LASSOGSA.inference(F_region, V_region, max_iter=200, random=self.random)
+            case Optimizers.DUAL_SIMULATED_ANNEALING:
+                return LASSODSA.inference(F_region, V_region, max_iter=1000, random=self.random)
