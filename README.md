@@ -8,7 +8,7 @@ The NIPA framework is designed to predict the spread of infectious diseases such
 
 ### Original Paper
 The original concept of NIPA can be found in the paper:
-- [NIPA Paper](https://example-link-to-original-paper.com)
+- [Network-inference-based prediction of the COVID-19 epidemic outbreak in the Chinese province Hubei](https://appliednetsci.springeropen.com/articles/10.1007/s41109-020-00274-2)
 
 ### Project Structure
 - **main.py**: The starting point of the program. It handles the command-line arguments and orchestrates the data processing, training, and prediction workflows.
@@ -27,23 +27,23 @@ The original concept of NIPA can be found in the paper:
 #### Command-Line Arguments
 The main entry point is `main.py`, which accepts the following arguments:
 
-- `--country`: Country to use [mexico, hubei, netherlands]
-- `--optimizers`: Optimizers to compare, separated by a comma [cv, cv_own, gsa, dsa]
+- `--country`: Country to use [mexico, hubei]
+- `--optimizers`: Optimizers to compare, separated by a comma [cv, gsa, dsa]
 - `--visuals`: Visualizations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]
 - `--visual_days`: Amount of days to show on the prediction visualization [default is 30]
 - `--evaluations`: Evaluations to compare, separated by a comma [mse, mape, smape]
-- `--type`: Type of NIPA to use [original, dynamic (NOT IMPLEMENTED)]
+- `--type`: Type of NIPA to use [original]
 - `--n_days`: Number of days to iterate the model over [default is all days]
 - `--train_days`: Number of days to train on when using Dynamic NIPA
 - `--pred_days`: Number of days to predict; can be multiple days separated by a comma
 - `--compensate_fluctuations`: Compensate for fluctuations in the data where each weekend has lower reported cases
 - `--predict`: Only predict the next days based on the trained model
-- `--random`: Randomize the seed for LASSO and simulated annealing used for the NIPA (otherwise random_state=42 is used)
+- `--random`: Randomize the seed for LASSO and simulated annealing used for the NIPA (otherwise seed of 42 is used)
 
 ### Examples
 To run the project with specific settings, use the command:
 ```bash
-python main.py --country mexico --optimizers cv,dsa --visuals all_pred,all_eval --evaluations mse,smape --type original --pred_days 3,7,14
+python main.py --country hubei --optimizers cv,dsa --evaluations mse,smape --pred_days 1,2,3,4,5,6
 ```
 
 ### Future Implementations
@@ -61,12 +61,6 @@ To install the required packages, run:
 ```bash
 pip install -r requirements.txt
 ```
-
-### Contribution
-Contributions are welcome! Please fork the repository and submit pull requests for any improvements or additions.
-
-### License
-This project is licensed under the MIT License. See the LICENSE file for details.
 
 ### Acknowledgements
 - University of Twente
