@@ -1,10 +1,10 @@
 # Regularization Parameter Optimization in NIPA using Simulated Annealing
 
 ### Overview
-This project is created for the bachelor thesis "Regularization Parameter Optimization in NIPA using Simulated Annealing" by Teun Hoven (University of Twente). The project aims to model, predict, and evaluate the spread of COVID-19 infections in different regions using the Network Inference-based Prediction Algorithm (NIPA) and various optimization techniques. 
+This project is created for the bachelor thesis _Regularization Parameter Optimization in NIPA using Simulated Annealing_ by Teun Hoven at the University of Twente. The project aims to model, predict, and evaluate the spread of COVID-19 infections in different regions using the Network Inference-based Prediction Algorithm and optimizing it by using Simulated Annealing. 
 
 ### Network Inference-based Prediction Algorithm (NIPA)
-The NIPA framework is designed to predict the spread of infectious diseases such as COVID-19 by leveraging network inference techniques. The algorithm is implemented to utilize multiple optimization techniques to determine the best set of parameters for accurate predictions.
+The NIPA framework is designed to predict the spread of infectious diseases such as COVID-19 by leveraging network inference techniques and the SIR-model. The algorithm is implemented with multiple optimization techniques (cross-validation and simulated annealing) to determine the best set of parameters for accurate predictions.
 
 ### Original Paper
 The original concept of NIPA can be found in the paper:
@@ -27,12 +27,12 @@ The original concept of NIPA can be found in the paper:
 #### Command-Line Arguments
 The main entry point is `main.py`, which accepts the following arguments:
 
-- `--country`: Country to use [mexico, hubei]
-- `--optimizers`: Optimizers to compare, separated by a comma [cv, gsa, dsa]
+- `--country`: Country to use [hubei, mexico]
+- `--optimizers`: Optimizers _(Cross-Validation, Generalized Simulated Annealing, Dual Simulated Annealing)_ to compare, separated by a comma [cv, gsa, dsa]
 - `--visuals`: Visualizations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]
 - `--visual_days`: Amount of days to show on the prediction visualization [default is 30]
 - `--evaluations`: Evaluations to compare, separated by a comma [mse, mape, smape]
-- `--type`: Type of NIPA to use [original]
+- `--type`: Type of NIPA to use [original].
 - `--n_days`: Number of days to iterate the model over [default is all days]
 - `--train_days`: Number of days to train on when using Dynamic NIPA
 - `--pred_days`: Number of days to predict; can be multiple days separated by a comma
@@ -47,10 +47,22 @@ python main.py --country hubei --optimizers cv,dsa --evaluations mse,smape --pre
 ```
 
 ### Future Implementations
-- **Dynamic NIPA**: Implementing the dynamic version of NIPA for more flexible and adaptive predictions.
-- **Additional Visualizations**: Including more detailed and interactive visualizations.
-- **Enhanced Evaluation Metrics**: Introducing more sophisticated evaluation metrics to assess model performance.
+
+#### Countries
+- **The Netherlands**: Adding the Netherlands and later more countries for better comparisons between optimizers.
 - **Extended Data Sources**: Integrating additional data sources for a more comprehensive dataset.
+
+#### Optimizers
+- **2D Simulated Annealing**: Integrating the optimization of the curing probability to simulated annealing will, in theory, improve accuracy and performance.
+- **Bayesian Optimization**: Implementing Bayesian optimization for better (and faster) regularization parameter optimization.
+
+#### Visualisations & Evaluations
+- **Additional Visualisations**: Implementing additional (interactive) visualisations can help with understanding the data.
+- **Additional Evaluation Metrics**: Implementing more evaluation metrics can help in analysing the data.
+
+#### Types
+- **Static NIPA**: Implementing the NIPA static prior ([from Achterberg et al.](https://linkinghub.elsevier.com/retrieve/pii/S0169207020301552)).
+- **Dynamic NIPA**: Implementing the NIPA dynamic prior ([from Achterberg et al.](https://linkinghub.elsevier.com/retrieve/pii/S0169207020301552)).
 
 ### Requirements
 - Python 3.x
@@ -63,5 +75,8 @@ pip install -r requirements.txt
 ```
 
 ### Acknowledgements
-- University of Twente
-- Supervisors and colleagues who provided guidance and support during the thesis project.
+- Alberto García-Robledo and Zangiabady Mahboobeh for providing guidance and support during the thesis project.
+- University of Twente for providing computing power
+
+### Notes
+The optimizer `dsa`/`gsa` has only been implemented on the regularization parameter. As of now, the curing probability is still been chosen by considering _candidate values_ and iterating over those and see which one fits best. This the the reason that `dsa` and `gsa` take a long time, because for each curing probability (in the _candidate values_ set), the simulated annealing algorithm is performed to find the best regularization parameter for the curing probability. In a later version, simulated annealing will be used to optimize both the curing probability and the regularization parameter.
