@@ -3,8 +3,6 @@ data/
 figures/
 network-data/
 results/
+temp/
 training-data/
-calc_init_temp.py
-create_tables.py
 NIPA_ALL.py
-plot_qa.py

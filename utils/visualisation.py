@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.patches as patches
 import numpy as np
 import polars as pl
 import os
@@ -67,7 +68,9 @@ def get_optimizer_labels(optimizer):
     if optimizer == Optimizers.GENERALIZED_SIMULATED_ANNEALING:
         return "Generalized Simulated Annealing"
     if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING:
-        return "Dual Simulated Annealing"
+        return "Simulated Annealing"
+    if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING_ALL:
+        return "Full Simulated Annealing"
 
 def get_summed_data(true_data, pred_data, regions, final_idx):
     """
@@ -209,31 +212,55 @@ def heatmap_B(B):
     B : DataFrame
         The matrix B.
     """
+    print(B)
     regions = B[:, 0].to_list()
     B = B.transpose(include_header=True, header_name="regions", column_names="regions")[:, 1:].to_numpy()
 
     B = np.round(B, 6)
     B[B == 0.0] = 0
+    
+    masked_data = np.where(B > 0, B, np.nan)
 
-    fig, ax = plt.subplots(figsize=(18, 18))
-    im = ax.imshow(B, aspect='auto', vmin=0, vmax=0.01)
+    # Get the 'hot' colormap and reverse it
+    cm = plt.cm.hot.reversed()
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    im = ax.imshow(masked_data, aspect='auto', cmap=cm, alpha=0.8)
 
     # Show all ticks and label them with the respective list entries
     ax.set_xticks(np.arange(len(regions)), labels=regions)
     ax.set_yticks(np.arange(len(regions)), labels=regions)
-
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-            rotation_mode="anchor")
+    ax.set_xticklabels(regions, fontsize=10)  # Adjust font size for tick labels
+    ax.set_yticklabels(regions, fontsize=10)  # Adjust font size for tick labels
 
     # Loop over data dimensions and create text annotations.
     for i in range(len(regions)):
         for j in range(len(regions)):
-            text = ax.text(j, i, B[i, j],
-                        ha="center", va="center", color="w")
+            value = B[i, j]
+
+            # Create a rectangle
+            rect = patches.Rectangle((j-0.5, i-0.5), 1, 1, linewidth=1, edgecolor='black', facecolor='none')
+            ax.add_patch(rect)
+            if value > 0:  # Only annotate cells with non-zero values
+                if value < 0.6:
+                    ax.text(j, i, f'{value:.4f}',
+                                ha="center", va="center", color="black")
+                else:
+                    ax.text(j, i, f'{value:.4f}',
+                                ha="center", va="center", color="white")
+            else:
+                ax.text(j, i, '0',
+                            ha="center", va="center", color="black")
 
     ax.set_title("Heatmap of Matrix B")
     fig.tight_layout()
+
+    fig_path = "figures/Hubei/Heatmap.png"
+
+    os.makedirs(os.path.dirname(fig_path), exist_ok=True)
+    fig.savefig(fig_path)
+    print(f'saving plotted graph to {fig_path}')
+    
     plt.show()
 
 def plot_predictions(I_data, pred, dates, regions, fig_path=None, amount_days=25, amount_regions=None):
@@ -388,7 +415,7 @@ def plot_all_predictions(I_data, pred, pred_optimizers, dates, regions, fig_path
     amount_regions : int, optional
         Number of regions to show. Default is None.
     """
-    colors = ['rs--', 'g^--', 'y2--', 'm8--', 'cx--', 'kd--', 'w_--']
+    colors = ['rs--', 'g^--', 'm8--', 'cx--', 'y2--', 'kd--', 'w_--']
     graph_names = list('abcdefghijklmnopqrstuvwxyz')
 
     if amount_regions is not None:
@@ -400,8 +427,8 @@ def plot_all_predictions(I_data, pred, pred_optimizers, dates, regions, fig_path
     end_date = dates[list(dates.keys())[-1]] + dt.timedelta(days=1)
 
     plt.style.use('classic')    
-    plt.rcParams.update({'font.size': 18})     
-    fig, axs = plt.subplots(ncols=cols, nrows=2, figsize=((15*cols), 25))
+    plt.rcParams.update({'font.size': 25})     
+    fig, axs = plt.subplots(ncols=cols, nrows=2, figsize=((15*cols), 27))
     fig.patch.set_facecolor('white')
 
     for idx, key in enumerate(list(pred.keys())):
@@ -451,7 +478,8 @@ def plot_all_predictions(I_data, pred, pred_optimizers, dates, regions, fig_path
             if cols == 1:
                 axs[y].set_xlim(start_date, end_date)
                 axs[y].xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
-                axs[y].xaxis.set_major_locator(mdates.DayLocator(interval=4))
+                axs[y].xaxis.set_major_locator(mdates.DayLocator(interval=3))
+                axs[y].tick_params(axis='x', labelrotation=45)
 
                 axs[y].set(xlabel='Day', ylabel='Fraction Infected (cumulative)',
                     title=f'({graph_names[idx]}) {key} days ahead')
@@ -461,6 +489,7 @@ def plot_all_predictions(I_data, pred, pred_optimizers, dates, regions, fig_path
                 axs[x,y].set_xlim(start_date, end_date)
                 axs[x,y].xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
                 axs[x,y].xaxis.set_major_locator(mdates.DayLocator(interval=3))
+                axs[x,y].tick_params(axis='x', labelrotation=45)
 
                 axs[x,y].set(xlabel='Day', ylabel='Fraction Infected (cumulative)',
                     title=f'({graph_names[idx]}) {key} days ahead')
@@ -492,7 +521,7 @@ def plot_evaluations(eval_dfs, eval_optimizers, fig_path=None, amount_days=25, e
     evaluations : list of Evaluation, optional
         List of evaluation metrics to plot. Default is [Evaluation.MSE].
     """
-    colors = ['rs-', 'g^-', 'y2-', 'm8-', 'cx-', 'kd-', 'w_-']
+    colors = ['rs--', 'g^--', 'm8--', 'cx--', 'y2--', 'kd--', 'w_--']
     graph_names = list('abcdefghijklmnopqrstuvwxyz')
 
     labels = []
@@ -500,7 +529,7 @@ def plot_evaluations(eval_dfs, eval_optimizers, fig_path=None, amount_days=25, e
     cols = int(np.ceil(len(list(eval_dfs.keys()))/2))
 
     for evaluation in evaluations:
-        fig, axs = plt.subplots(ncols=cols, nrows=2, figsize=((15*cols), 20))
+        fig, axs = plt.subplots(ncols=cols, nrows=2, figsize=((15*cols), 27))
         fig.patch.set_facecolor('white')
 
         if evaluation == Evaluation.sMAPE:
@@ -531,6 +560,7 @@ def plot_evaluations(eval_dfs, eval_optimizers, fig_path=None, amount_days=25, e
                 axs[y].set_xlim(start_date, end_date)
                 axs[y].xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
                 axs[y].xaxis.set_major_locator(mdates.DayLocator())
+                axs[y].tick_params(axis='x', labelrotation=45)
 
                 axs[y].set(xlabel='Day', ylabel=get_evaluation_labels(evaluation),
                     title=f'({graph_names[idx]}) {eval} of {pred_days} days ahead')
@@ -540,6 +570,7 @@ def plot_evaluations(eval_dfs, eval_optimizers, fig_path=None, amount_days=25, e
                 axs[x,y].set_xlim(start_date, end_date)
                 axs[x,y].xaxis.set_major_formatter(mdates.DateFormatter('%d-%b'))
                 axs[x,y].xaxis.set_major_locator(mdates.DayLocator())
+                axs[x,y].tick_params(axis='x', labelrotation=45)
 
                 axs[x,y].set(xlabel='Day', ylabel=get_evaluation_labels(evaluation),
                     title=f'({graph_names[idx]}) {eval} of {pred_days} days ahead')

@@ -123,7 +123,7 @@ class Settings:
             'cv': Optimizers.CV,
             'gsa': Optimizers.GENERALIZED_SIMULATED_ANNEALING,
             'dsa': Optimizers.DUAL_SIMULATED_ANNEALING,
-            'dsa_all': Optimizers.DUAL_SIMULATED_ANNEALING_ALL
+            'full_dsa': Optimizers.DUAL_SIMULATED_ANNEALING_ALL
         }
         try:
             return [optimizer_map[opt] for opt in optimizers.split(',')]

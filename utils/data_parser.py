@@ -34,7 +34,7 @@ def compensate_fluctuations(data, dates, time):
     I_transposed = I_transposed.with_columns(pl.Series("k", col))
 
     # Apply rolling mean to compensate for fluctuations
-    I_compensated = I_transposed.select([pl.col(col.name).rolling_mean_by('k', window_size=f'{time}d', closed='both') for col in I_transposed[:, 1:].get_columns()])
+    I_compensated = I_transposed.select([pl.col(col.name).rolling_mean_by('k', window_size=f'{time}d', closed='right') for col in I_transposed[:, 1:].get_columns()])
     I_compensated = I_compensated.insert_column(0, I_transposed.get_column('k'))
 
     col = []
@@ -204,7 +204,7 @@ def get_hubei_province(final_date="all", do_compensate_fluctuations=True):
     I, I_dates = get_I(full_data, regions, population, final_date)
 
     if do_compensate_fluctuations:
-        I = compensate_fluctuations(I, I_dates, 1)
+        I = compensate_fluctuations(I, I_dates, 5)
 
     save_train_data(I, Country.Hubei, "I")
 

@@ -22,11 +22,11 @@ import datetime as dt
 import numpy as np
 import argparse
 
-from NIPA import NIPA
-from NIPA_ALL import NIPA as NIPA_ALL
+from NIPA_CV import NIPA as NIPA_train_CV
+from NIPA_SA import NIPA as NIPA_train_SA
+from NIPA import NIPA as NIPA
 
 from sklearn.exceptions import ConvergenceWarning
-import sklearn.metrics as metrics
 import warnings
 warnings.simplefilter("ignore", category=ConvergenceWarning)
 
@@ -50,7 +50,7 @@ def get_args():
         help='Country to use [mexico, hubei, netherlands]')
     parser.add_argument(
         '--optimizers', type=str, default='cv,dsa',
-        help='Optimizers to compare, separated by a comma [cv, cv_own, gsa, dsa]')
+        help='Optimizers to compare, separated by a comma [cv, gsa, dsa, full_dsa]')
     parser.add_argument(
         '--visuals', type=str, default='all_pred,all_eval',
         help='Visualisations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]')
@@ -74,7 +74,7 @@ def get_args():
         '--pred_days', type=str, default="3",
         help='Number of days to predict; can be multiple days separated by a comma')
     parser.add_argument(
-        '--compensate_fluctuations', type=bool, default=True,
+        '--compensate_fluctuations', type=bool, default=False,
         help='Compensate for fluctuations in the data where each weekend has lower reported cases')
     parser.add_argument(
         '--predict', type=bool, default=False,
@@ -157,7 +157,7 @@ def start(I_data, dates, regions, settings):
 
         # Iterate over each optimizer
         for optimizer in optimizers:
-            nipa = (NIPA_ALL if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING_ALL else NIPA)(
+            nipa = (NIPA_train_SA if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING_ALL else NIPA_train_CV)(
                 data=x, regions=regions, country=country, type=type, dates=dates, parameter_optimizer=optimizer, random=random)
 
             train_start = time.time()
@@ -262,7 +262,7 @@ def predict(I_data, regions, dates_list, settings, final_dates, visualisations=[
             curing_probs_data = curing_probs[i]
 
             if Visualizations.HEATMAP in visualisations:
-                visualisation.heatmap_B(B)
+                visualisation.heatmap_B(B_data)
 
             pred_I, pred_R = nipa.predict(B_data, pred_dates, curing_probs_data)
             predictions.append(pred_I)
@@ -274,7 +274,7 @@ def predict(I_data, regions, dates_list, settings, final_dates, visualisations=[
                 io.save_results_data(pred_I, country, type, nipa.parameter_optimizer, data_date, "I_pred")
                 io.save_results_data(pred_R, country, type, nipa.parameter_optimizer, data_date, "R_pred")
 
-            print(f"Predicting {pred_days} days for {data_date.strftime('%d-%m-%Y')} with optimizer {optimizer.name}:")
+            print(f"Predicting {pred_days} days after {data_date.strftime('%d-%m-%Y')} with optimizer {optimizer.name}:")
             eval = evaluation.get_prediction_evaluation(I_data, dates, data_date, country, type, nipa.parameter_optimizer, evaluations)
             
             for key in eval.keys():
@@ -307,6 +307,7 @@ if __name__ == '__main__':
     n_days = settings.n_days
     prediction_days = settings.pred_days
     compensate_fluctuations = settings.compensate_fluctuations
+    print(f"args: {args.compensate_fluctuations}, settings: {compensate_fluctuations}")
     visualizations = settings.visualizations
 
     # Load data
