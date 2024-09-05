@@ -28,7 +28,7 @@ The original concept of NIPA can be found in the paper:
 The main entry point is `main.py`, which accepts the following arguments:
 
 - `--country`: Country to use [hubei, mexico]
-- `--optimizers`: Optimizers _(Cross-Validation, Generalized Simulated Annealing, Dual Simulated Annealing)_ to compare, separated by a comma [cv, gsa, dsa]
+- `--optimizers`: Optimizers _(Cross-Validation, Dual Simulated Annealing)_ to compare, separated by a comma [cv, dsa]
 - `--visuals`: Visualizations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]
 - `--visual_days`: Amount of days to show on the prediction visualization [default is 30]
 - `--evaluations`: Evaluations to compare, separated by a comma [mse, mape, smape]
