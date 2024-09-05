@@ -2,6 +2,4 @@ from enum import Enum
 
 class Optimizers(Enum):
     CV = 1
-    GENERALIZED_SIMULATED_ANNEALING = 3
-    DUAL_SIMULATED_ANNEALING = 4
     DUAL_SIMULATED_ANNEALING_ALL = 5

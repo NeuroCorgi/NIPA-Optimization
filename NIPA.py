@@ -147,7 +147,7 @@ class NIPA:
             The interaction sum for the specified region and time.
         """
 
-        interaction_sum = sum(B.get_column(self.regions[i]).to_list()[j - 1] * self.I.get_column(str(j)).to_list()[k - 1] for j in self.regions.keys() if j != i)
+        interaction_sum = sum(B.get_column(self.regions[i]).to_list()[j - 1] * self.I.get_column(str(j)).to_list()[k - 1] for j in self.regions.keys())
         return interaction_sum
 
     def convert_dates_to_k(self, days):

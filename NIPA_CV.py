@@ -73,7 +73,7 @@ class NIPA:
 
         return {i+1: regions[i] for i in range(len(regions))}
 
-    def train(self, train_days):
+    def train(self, train_days, I_df_real):
         """
         Trains the model using the provided training days.
 
@@ -81,6 +81,8 @@ class NIPA:
         ----------
         train_days : list of datetime.date
             The training days.
+        I_df_real : Dataframe
+            [NOT USED in Cross-Validation] The real infected percentage of the population.
 
         Returns
         -------
@@ -226,7 +228,7 @@ class NIPA:
             The interaction sum for the specified region and time.
         """
 
-        interaction_sum = sum(B.get_column(self.regions[i]).to_list()[j - 1] * self.I.get_column(str(j)).to_list()[k - 1] for j in self.regions.keys() if j != i)
+        interaction_sum = sum(B.get_column(self.regions[i]).to_list()[j - 1] * self.I.get_column(str(j)).to_list()[k - 1] for j in self.regions.keys())
         return interaction_sum
 
     def convert_dates_to_k(self, days):
@@ -376,7 +378,3 @@ class NIPA:
         match self.parameter_optimizer:
             case Optimizers.CV:
                 return LASSOCV.inference(F_region, V_region, random=self.random)
-            case Optimizers.GENERALIZED_SIMULATED_ANNEALING:
-                return LASSOGSA.inference(F_region, V_region, max_iter=200, random=self.random)
-            case Optimizers.DUAL_SIMULATED_ANNEALING:
-                return LASSODSA.inference(F_region, V_region, max_iter=1000, random=self.random)

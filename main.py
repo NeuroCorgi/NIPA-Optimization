@@ -46,11 +46,11 @@ def get_args():
     parser = argparse.ArgumentParser(description='Train and predict the NIPA model')
     parser.add_argument(
         '--country', type=str, default='mexico',
-        choices=['mexico', 'hubei', 'netherlands'],
-        help='Country to use [mexico, hubei, netherlands]')
+        choices=['mexico', 'hubei'],
+        help='Country to use [mexico, hubei]')
     parser.add_argument(
         '--optimizers', type=str, default='cv,dsa',
-        help='Optimizers to compare, separated by a comma [cv, gsa, dsa, full_dsa]')
+        help='Optimizers to compare, separated by a comma [cv, dsa]')
     parser.add_argument(
         '--visuals', type=str, default='all_pred,all_eval',
         help='Visualisations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]')
@@ -63,7 +63,7 @@ def get_args():
     parser.add_argument(
         '--type', type=str, default='original',
         choices=['original', 'dynamic'],
-        help='Type of NIPA to use [original, dynamic (NOT IMPLEMENTED)]')
+        help='Type of NIPA to use [original]')
     parser.add_argument(
         '--n_days', type=int, default=None,
         help='Number of days to iterate the model over [default is all days]')
@@ -133,7 +133,7 @@ def to_hours(seconds):
     return f"{hours} hours, {minutes} minutes and {seconds} seconds"
 
 
-def start(I_data, dates, regions, settings):
+def start(I_data, real_I_data, dates, regions, settings):
     """
     Start the training and prediction process.
 
@@ -180,7 +180,7 @@ def start(I_data, dates, regions, settings):
                 predict_days = train_dates[k][train_idx:]
 
                 print(f"Training for k={k} for {train_days[0].strftime('%d-%m-%Y')} to {train_days[-1].strftime('%d-%m-%Y')}")
-                B = nipa.train(train_days)
+                B = nipa.train(train_days, real_I_data)
 
                 print(f"Predicting {predict_days[0].strftime('%d-%m-%Y')} to {predict_days[-1].strftime('%d-%m-%Y')}")
                 pred_I, pred_R = nipa.predict(B, predict_days, nipa.curing_probs)
@@ -320,6 +320,7 @@ if __name__ == '__main__':
 
     # Load data
     I_data, dates, regions = data_parser.get_data(country=country, compensate_fluctuations=compensate_fluctuations)
+    real_I_data, real_dates, real_regions = data_parser.get_data(country=country, compensate_fluctuations=False)
 
     # Set the number of training days if not specified
     if n_days is None:
@@ -335,5 +336,5 @@ if __name__ == '__main__':
 
     # Start training and prediction process
     if not args.predict:
-        start(I_data, dates, regions, settings)
+        start(I_data, real_I_data, dates, regions, settings)
     predict(I_data, regions, dates, settings, final_dates=[dates[n_day] for n_day in n_days], visualisations=visualizations)

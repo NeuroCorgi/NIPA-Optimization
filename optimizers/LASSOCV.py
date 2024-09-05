@@ -76,6 +76,7 @@ def inference(F_region, V_region, k_fold=3, amount_CPUs=-1, random=False):
         region_B = lasso.coef_
         sum = np.sum(region_B)
         p_value = lasso.alpha_
+        
         region_MSE = evaluation.MSE(V_region, lasso.predict(F_region))
 
         p_candidates = np.setdiff1d(p_candidates, np.array([p_value]))
