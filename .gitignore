@@ -6,3 +6,4 @@ results/
 temp/
 training-data/
 NIPA_ALL.py
+__pycache__
