@@ -15,7 +15,6 @@ from pathlib import Path
 from enum import Enum
 
 import time
-import atexit
 
 import polars as pl
 import datetime as dt
@@ -24,6 +23,7 @@ import argparse
 
 from NIPA_CV import NIPA as NIPA_train_CV
 from NIPA_SA import NIPA as NIPA_train_SA
+from NIPA_GA import NIPA as NIPA_train_GA
 from NIPA import NIPA as NIPA
 
 from sklearn.exceptions import ConvergenceWarning
@@ -50,7 +50,7 @@ def get_args():
         help='Country to use [mexico, hubei]')
     parser.add_argument(
         '--optimizers', type=str, default='cv,dsa',
-        help='Optimizers to compare, separated by a comma [cv, dsa]')
+        help='Optimizers to compare, separated by a comma [cv, dsa, ga]')
     parser.add_argument(
         '--visuals', type=str, default='all_pred,all_eval',
         help='Visualisations to show, separated by a comma [all, all_pred, all_eval, heatmap, optimizer_pred, optimizer_eval]')
@@ -166,8 +166,15 @@ def start(I_data, real_I_data, dates, regions, settings):
 
         # Iterate over each optimizer
         for optimizer in optimizers:
-            nipa = (NIPA_train_SA if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING_ALL else NIPA_train_CV)(
-                data=x, regions=regions, country=country, type=type, dates=dates, parameter_optimizer=optimizer, random=random)
+            match optimizer:
+                case Optimizers.CV:
+                    Nipa = NIPA_train_CV
+                case Optimizers.DUAL_SIMULATED_ANNEALING_ALL:
+                    Nipa = NIPA_train_SA
+                case Optimizers.GENETIC_ALGORITYHM:
+                    Nipa = NIPA_train_GA
+                    
+            nipa = Nipa(data=x, regions=regions, country=country, type=type, dates=dates, parameter_optimizer=optimizer, random=random)
 
             train_start = time.time()
 

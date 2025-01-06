@@ -63,14 +63,17 @@ def get_evaluation_labels(evaluation):
         raise Exception("Invalid evaluation metric")
     
 def get_optimizer_labels(optimizer):
-    if optimizer == Optimizers.CV:
-        return "Cross-Validation"
-    if optimizer == Optimizers.GENERALIZED_SIMULATED_ANNEALING:
-        return "Generalized Simulated Annealing"
-    if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING:
-        return "Simulated Annealing"
-    if optimizer == Optimizers.DUAL_SIMULATED_ANNEALING_ALL:
-        return "Full Simulated Annealing"
+    match optimizer:
+        case Optimizers.CV:
+            return "Cross-Validation"
+        # case Optimizers.GENERALIZED_SIMULATED_ANNEALING:
+        #     return "Generalized Simulated Annealing"
+        # case Optimizers.DUAL_SIMULATED_ANNEALING:
+        #     return "Simulated Annealing"
+        case Optimizers.DUAL_SIMULATED_ANNEALING_ALL:
+            return "Full Simulated Annealing"
+        case Optimizers.GENETIC_ALGORITYHM:
+            return "Genetic Algorithm"
 
 def get_summed_data(true_data, pred_data, regions, final_idx):
     """
@@ -131,7 +134,7 @@ def visualise_simulated_annealing(all_p, all_MSE, fig_path=None):
     """
     combined_p_MSE = zip(all_p, all_MSE)
     sorted_list = sorted(combined_p_MSE, key=lambda x: x[0])
-    sorted_list = [item for item in sorted_list if item[1] is not 1.0]
+    sorted_list = [item for item in sorted_list if item[1] != 1.0]
 
     # Find the first index where MSE does not change significantly
     first_index_double = [idx for idx, item in enumerate(sorted_list) if (item[1] == sorted_list[idx-1][1] and idx > 50)][0]
@@ -183,7 +186,7 @@ def plot_p_vs_evaluation(all_p, all_evals, evaluation=Evaluation.MSE, fig_path=N
 
     combined_p_eval = zip(all_p, all_evals)
     sorted_list = sorted(combined_p_eval, key=lambda x: x[0])
-    sorted_list = [item for item in sorted_list if item[1] is not 1.0]
+    sorted_list = [item for item in sorted_list if item[1] != 1.0]
 
     # Find the first index where the evaluation metric does not change significantly
     first_index_double = [idx for idx, item in enumerate(sorted_list) if (item[1] == sorted_list[idx-1][1] and idx > 50)]

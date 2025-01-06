@@ -121,7 +121,8 @@ class Settings:
         """
         optimizer_map = {
             'cv': Optimizers.CV,
-            'dsa': Optimizers.DUAL_SIMULATED_ANNEALING_ALL
+            'dsa': Optimizers.DUAL_SIMULATED_ANNEALING_ALL,
+            'ga': Optimizers.GENETIC_ALGORITYHM,
         }
         try:
             return [optimizer_map[opt] for opt in optimizers.split(',')]
